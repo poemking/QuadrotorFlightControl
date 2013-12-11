@@ -68,7 +68,8 @@ SRC += $(PROGRAM_ALG)/algorithm_*.c \
 		$(PROGRAM_SYS)/QCopterFC_*.c \
 		Program_System/QCopterFC.c \
 		Libraries/CMSIS/FastMathFunctions/arm_cos_f32.c \
-		Libraries/CMSIS/FastMathFunctions/arm_sin_f32.c
+		Libraries/CMSIS/FastMathFunctions/arm_sin_f32.c \
+		test.c
 
 
 #STM32 startup file

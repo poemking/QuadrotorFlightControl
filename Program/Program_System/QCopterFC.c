@@ -62,13 +62,7 @@ int main(void)
 
 	/* System Init */
 	System_Init();
-	/*test  TX RX  */
-	RS232_SendStr(USART3, "abcde");
-
-	/*test printf can support USART*/
-	float c = 5.24;
-	printf("printf\n\r");
-	printf("%f\n\r", c);
+	test_printf();
 
 	/* Throttle Config */
 	if (KEY == 1) {

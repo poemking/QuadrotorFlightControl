@@ -206,14 +206,17 @@ char *itoa(int value, char *str)
 	int divideNum = base;
 	int i = 0;
 
+	if (value < 0) {
+		str[0] = '-';
+		i++;
+		value*=-1;
+	}
+
 	while (value / divideNum > 0) {
 		divideNum *= base;
 	}
 
-	if (value < 0) {
-		str[0] = '-';
-		i++;
-	}
+	
 
 	while (divideNum / base > 0) {
 		divideNum /= base;

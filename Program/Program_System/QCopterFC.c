@@ -66,9 +66,9 @@ int main(void)
 	RS232_SendStr(USART3, "abcde");
 
 	/*test printf can support USART*/
-	int c = 10;
+	float c = 5.24;
 	printf("printf\n\r");
-	printf("%d\n\r", c);
+	printf("%f\n\r", c);
 
 	/* Throttle Config */
 	if (KEY == 1) {

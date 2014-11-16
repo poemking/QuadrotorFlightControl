@@ -15,6 +15,9 @@ volatile uint32_t Correction_Time = 0;
 
 Sensor_Mode SensorMode = Mode_GyrCorrect;
 extern SYSTEM_STATUS sys_status;
+extern SYSTEM_STATUS set_PWM_Motors;
+int set_landing =0;
+float i3=0;
 
 /*=====================================================================================================*/
 #define PRINT_DEBUG(var1) printf("DEBUG PRINT"#var1"\r\n")
@@ -43,10 +46,15 @@ void system_init(void)
 	LED_Config();
 	KEY_Config();
 	RS232_Config();
+	
+/*	
 	Motor_Config();
 	PWM_Capture_Config();
+	
 	Sensor_Config();
+	
 	nRF24L01_Config();
+	
 
 #if configSD_BOARD
 	SDIO_Config();
@@ -56,39 +64,44 @@ void system_init(void)
 	PID_Init(&PID_Roll);
 	PID_Init(&PID_Pitch);
 
-	PID_Pitch.Kp = +4.0f;
-	PID_Pitch.Ki = 0;//0.002f;
-	PID_Pitch.Kd = +1.5f;
+	PID_Pitch.Kp = +4.0f;	//4.0f * 0.7 = 2.8f
+	PID_Pitch.Ki = 0;
+	PID_Pitch.Kd = +1.5f;	//1.5f * 0.7 = 1.05f
 
-	PID_Roll.Kp = +4.0f;
-	PID_Roll.Ki = 0;//0.002f;
-	PID_Roll.Kd = 1.5f;
+	PID_Roll.Kp = +4.0f;	//4.0f * 0.7 = 2.8f
+	PID_Roll.Ki = 0;
+	PID_Roll.Kd = 1.5f ;	//1.5f * 0.7 = 1.05f
 
-	PID_Yaw.Kp = +5.0f;
-	PID_Yaw.Ki = +0.0f;
-	PID_Yaw.Kd = +15.0f;
+	PID_Yaw.Kp = +5.0f ;	//5.0f * 0.7 = 3.5f
+	PID_Yaw.Ki = 0;
+	PID_Yaw.Kd = +15.0f;	//15.0f * 0.7=10.5f
 
 	Delay_10ms(10);
 
+	
+	
 	Motor_Control(PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN);
 
 
-#if configFLIGHT_CONTROL_BOARD
-	/* nRF Check */
+#if configSTATUS_NRF
+
 	while ( nRF_Check()== ERROR );
-
-	/* Sensor Init */
-	while(Sensor_Init() == ERROR);
 #endif
-
+	
+//	while(Sensor_Init() == ERROR);
+//LED_R = 0;
+//LED_B = 0;
+//LED_G = 0;
 	Delay_10ms(10);
 
-	/* Lock */
+	
 	LED_R = 0;
 	LED_G = 1;
 	LED_B = 1;
 
 	sys_status = SYSTEM_INITIALIZED;
+	set_PWM_Motors = SYSTEM_UNINITIALIZED;
+	*/
 
 }
 
@@ -164,8 +177,8 @@ void correction_task()
 void flightControl_task()
 {
 	//Waiting for system finish initialize
-	while (sys_status == SYSTEM_UNINITIALIZED);
-	sys_status = SYSTEM_FLIGHT_CONTROL;
+//	while (sys_status == SYSTEM_UNINITIALIZED);
+//	sys_status = SYSTEM_FLIGHT_CONTROL;
 	while (1) {
 		GPIO_ToggleBits(GPIOC, GPIO_Pin_7);
 		uint8_t IMU_Buf[20] = {0};
@@ -230,6 +243,7 @@ void flightControl_task()
 			Mag.Y = (s16)MoveAve_WMA(Mag.Y, MAG_FIFO[1], 64);
 			Mag.Z = (s16)MoveAve_WMA(Mag.Z, MAG_FIFO[2], 64);
 
+
 			/* To Physical */
 			Acc.TrueX = Acc.X * MPU9150A_4g;      // g/LSB
 			Acc.TrueY = Acc.Y * MPU9150A_4g;      // g/LSB
@@ -241,6 +255,12 @@ void flightControl_task()
 			Mag.TrueY = Mag.Y * MPU9150M_1200uT;  // uT/LSB
 			Mag.TrueZ = Mag.Z * MPU9150M_1200uT;  // uT/LSB
 			Temp.TrueT = Temp.T * MPU9150T_85degC; // degC/LSB
+
+global_var[test1].param = Acc.TrueX;
+global_var[test2].param = Gyr.TrueX;
+global_var[test3].param = Mag.TrueY;
+global_var[test4].param = Mag.TrueZ;
+
 
 			/* Get Attitude Angle */
 			AHRS_Update();
@@ -265,39 +285,64 @@ void flightControl_task()
 //      Yaw   = (s16)PID_AHRS_CalYaw(&PID_Yaw, AngE.Yaw,   Gyr.TrueZ);
 			Yaw   = (s16)(PID_Yaw.Kd * Gyr.TrueZ) + 3 * (s16)Exp_Yaw;
 			Thr   = (s16)Exp_Thr;
+			Bound(Yaw, -90, 90);
 
-			global_var[PID_ROLL].param = Roll;
-			global_var[PID_PITCH].param = Pitch;
-			global_var[PID_YAW].param = Yaw;
+			global_var[OPERATE_ROLL].param = Roll;
+			global_var[OPERATE_PITCH].param = Pitch;
+			global_var[OPERATE_YAW].param = Yaw;
+			global_var[OPERATE_THR].param = Thr;
 
+			if(set_PWM_Motors ==SYSTEM_UNINITIALIZED){
+					/* Motor Ctrl */
+					Final_M1 = Thr + Pitch - Roll + Yaw; //moonbear: - Yaw
+					Final_M2 = Thr + Pitch + Roll - Yaw; //moonbear: + Yaw
+					Final_M3 = Thr - Pitch + Roll + Yaw; //moonbear: - Yaw
+					Final_M4 = Thr - Pitch - Roll - Yaw; //moonbear: + Yaw
+			
+				/* [Motor PWM > 1300] represents that the quadrotor has taken off  */ 
+				/*test auto landing ...
 
-			/* Motor Ctrl */
-			Final_M1 = Thr + Pitch - Roll - Yaw;
-			Final_M2 = Thr + Pitch + Roll + Yaw;
-			Final_M3 = Thr - Pitch + Roll - Yaw;
-			Final_M4 = Thr - Pitch - Roll + Yaw;
-
-			global_var[MOTOR1].param = Final_M1;
-			global_var[MOTOR2].param = Final_M2;
-			global_var[MOTOR3].param = Final_M3;
-			global_var[MOTOR4].param = Final_M4;
-
-			Bound(Final_M1, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
-			Bound(Final_M2, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
-			Bound(Final_M3, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
-			Bound(Final_M4, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
-
-
-			if (safety == 1) {
-				Motor_Control(PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN);
-
-			} else {
-				Motor_Control(Final_M1, Final_M2, Final_M3, Final_M4);
+				if(Final_M1 > 1300){
+				set_landing =1;														
+				}
+				if((Final_M1 < 1100) && (set_landing == 1)){			
+					Final_M1 = 1100-i3;
+					Final_M2 = 1100-i3;
+					Final_M3 = 1100-i3;
+					Final_M4 = 1100-i3;
+					i3=i3+0.1;
+					if (Final_M1 == 830){
+						i3 = 0;	
+						set_landing = 0;	
+					}														
+				}	*/
 			}
+			if(set_PWM_Motors ==SYSTEM_INITIALIZED){
+	
+				Final_M1 = global_var[Write_PWM_Motor1].param;
+				Final_M2 = global_var[Write_PWM_Motor2].param;
+				Final_M3 = global_var[Write_PWM_Motor3].param;
+				Final_M4 = global_var[Write_PWM_Motor4].param;				
+			}
+				
+				Bound(Final_M1, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
+				Bound(Final_M2, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
+				Bound(Final_M3, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
+				Bound(Final_M4, PWM_MOTOR_MIN, PWM_MOTOR_MAX);
 
+				global_var[MOTOR1].param = Final_M1;
+				global_var[MOTOR2].param = Final_M2;
+				global_var[MOTOR3].param = Final_M3;
+				global_var[MOTOR4].param = Final_M4;
+
+				if (safety == 1) {
+					Motor_Control(PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN, PWM_MOTOR_MIN);
+				} 
+				else {		
+				Motor_Control(Final_M1, Final_M2, Final_M3, Final_M4);
+				}
+			
 			vTaskDelay(2);
-
-
 		}
 
 	}
@@ -322,12 +367,14 @@ void statusReport_task()
 	}
 }
 
-void check_task()
+void check_task() //protect switch
 {
 	//Waiting for system finish initialize
 	while (sys_status == SYSTEM_UNINITIALIZED);
 
-	while (remote_signal_check() == NO_SIGNAL);
+#if configMotor
+	while (remote_signal_check() == NO_SIGNAL); //If there is no receiver but need to test IMU, please mask.
+#endif
 	LED_B = 0;
 	vTaskResume(correction_task_handle);
 	while(sys_status != SYSTEM_FLIGHT_CONTROL);
@@ -371,47 +418,43 @@ int main(void)
 
 	vSemaphoreCreateBinary(serial_tx_wait_sem);
 	serial_rx_queue = xQueueCreate(1, sizeof(serial_msg));
-	/*Create sdio run semaphore*/
+	
 	sdio_semaphore = xSemaphoreCreateBinary();
-	xTaskCreate(check_task,
-		    (signed portCHAR *) "Initial checking",
-		    512, NULL,
-		    tskIDLE_PRIORITY + 5, NULL);
-	xTaskCreate(correction_task,
-		    (signed portCHAR *) "Initial checking",
-		    4096, NULL,
-		    tskIDLE_PRIORITY + 9, &correction_task_handle);
-#if configSD_BOARD
-	 xTaskCreate(sdio_task,
-	 	    (signed portCHAR *) "Using SD card",
-	 	    512, NULL,
-	 	    tskIDLE_PRIORITY + 6, NULL);
-#endif
+//	xTaskCreate(check_task,
+//		    (signed portCHAR *) "Initial checking",
+//		    512, NULL,
+//		    tskIDLE_PRIORITY + 5, NULL);
+//	xTaskCreate(correction_task,
+//		    (signed portCHAR *) "Initial checking",
+//		    4096, NULL,
+//		    tskIDLE_PRIORITY + 9, &correction_task_handle);
+//#if configSD_BOARD
+//	 xTaskCreate(sdio_task,
+//	 	    (signed portCHAR *) "Using SD card",
+//	 	    512, NULL,
+//	 	    tskIDLE_PRIORITY + 6, NULL);
+//#endif
 
-
-
-
-#if configSTATUS_SHELL
 	xTaskCreate(shell_task,
 		    (signed portCHAR *) "Shell",
 		    2048, NULL,
 		    tskIDLE_PRIORITY + 5, NULL);
-#endif
-
+/*
 	xTaskCreate(flightControl_task,
 		    (signed portCHAR *) "Flight control",
 		    4096, NULL,
 		    tskIDLE_PRIORITY + 9, &FlightControl_Handle);
-#if configSTATUS_GUI
+#if configSTATUS_NRF
 	xTaskCreate(nrf_sending_task,
 	(signed portCHAR *) "NRF_SENDING",
 	1024, NULL,
 	tskIDLE_PRIORITY + 5, NULL);
 #endif
 	vTaskSuspend(FlightControl_Handle);
-	vTaskSuspend(correction_task_handle);
+	vTaskSuspend(correction_task_handle);*/
 
 	vTaskStartScheduler();
+	while(1);
 
 	return 0;
 }

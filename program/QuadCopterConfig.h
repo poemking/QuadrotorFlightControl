@@ -1,15 +1,17 @@
 #ifndef __QUADCOPTER_CONFIG_H
 #define __QUADCOPTER_CONFIG_H
 /*RADIO CONTROL*/
-#define USE_FUTABA_CONTROLLER 1
-#define USE_WFLY_CONTROLLER 0
+#define USE_FUTABA_CONTROLLER 0
+#define USE_WFLY_CONTROLLER 1
 /* Hardware environments */
-#define configFLIGHT_CONTROL_BOARD	0
-#define configSD_BOARD			0
-
+#define configSD_BOARD			0		//Choose whether to ignore SD card or not (0=ignore);
+#define configSTATUS_NRF		0       //Choose whether to ignore nRF or not (0=ignore);
+#define configMotor				0       //if you no connect motor -> set 0. 
 /* Status report functions */
-#define configSTATUS_GUI		1
-#define configSTATUS_SHELL		1
+#define configSTATUS_SHELL		0
+#define configSTATUS_GET_MOTORS	1
+#define configSTATUS_GET_ROLL_PITCH	0
+#define configSTATUS_GET_ROLL_PITCH_MOTORS 0
 
 /* Includes */
 //FreeRTOS
@@ -25,6 +27,7 @@
 #include "QCopterFC_ahrs.h"
 #include "QCopterFC_ctrl.h"
 #include "sensor_correct.h"
+#include "communication.h"
 
 //Algorithm
 #include "algorithm_pid.h"
@@ -57,6 +60,7 @@
 #include "linenoise.h"
 #include "shell.h"
 #include "parser.h"
+#include "status_monitor.h"
 
 //Unit test
 #include "test.h"

@@ -96,6 +96,7 @@ SRC+=$(PROGRAM_ALG)/algorithm_*.c \
 		$(PROGRAM_SYS)/sensor_correct.c \
 		$(PROGRAM_SYS)/main.c \
 		$(PROGRAM_SYS)/sys_manager.c \
+		$(PROGRAM_SYS)/communication.c \
 		lib/CMSIS/FastMathFunctions/arm_cos_f32.c \
 		lib/CMSIS/FastMathFunctions/arm_sin_f32.c \
 		test.c \
@@ -158,6 +159,9 @@ clean:
 #Make flash
 flash:
 	st-flash write $(BIN_IMAGE) 0x8000000
+#Make screen
+screen:
+	echo sudo screen /dev/ttyUSB0 9600 
 #======================================================================#
 openocd: flash
 	openocd -s /opt/openocd/share/openocd/scripts/
